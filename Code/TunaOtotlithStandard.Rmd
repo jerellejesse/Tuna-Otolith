@@ -1,0 +1,328 @@
+---
+title: "Big Eye Tuna Otolith Micro-Chemistry"
+author: "Jerelle Jesse"
+output:
+    html_document: 
+    toc: true
+    toc_float: true
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+# Access GMRI CSS Style
+library(gmRi)
+gmRi::use_gmri_style_rmd(css_file = "gmri_rmarkdown.css")
+
+library(here)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(gtools)
+library(purrr)
+library(tm)
+library(ggplot2)
+library(ggrepel)
+```
+
+```{r}
+# load in data
+otolith <- read.csv(here("Data/ICPMS master_071922.csv"))
+head(otolith)
+str(otolith)
+
+```
+
+### Step 1: Filter out "bad" data
+
+```{r}
+#remove flagged data
+otolith_filter <- filter(otolith, Cut.Out ==0)
+
+#remove columns we don't need and convert to long format
+otolith_select <- dplyr::select(otolith_filter, Plate, ID, ID2,
+                         X7Li,
+                         X25Mg,
+                         X43Ca,
+                         X55Mn,
+                         X63Cu,
+                         X68Zn,
+                         X88Sr,
+                         X138Ba)%>%
+                tidyr::gather(element, measurement, X7Li:X138Ba)
+
+
+```
+
+## Step 2: Calculate Standardization
+
+-   average for blanks and standards
+
+-   each sample separate (laser hits)
+
+```{r}
+#read in data with bad data filtered out
+data <- read.csv(here("Data/ICPMS master_071922.csv"))
+#changing plate numbers so the data can be sorted into the correct order without the letters
+data$Plate[data$Plate=="1b"] <- 1
+data$Plate[data$Plate=="3d"] <- 3
+data$Plate[data$Plate=="5b"] <- 5
+data$Plate[data$Plate=="6i"] <- 6
+data$Plate[data$Plate=="7b"] <- 7
+data$Plate[data$Plate=="8b"] <- 8
+
+data$Plate <- as.numeric(data$Plate)
+
+#filtering out bad data, renaming columns, and making tidy
+data_filter <- filter(data, Cut.Out ==0)%>%
+  rename(Li7= X7Li, Mg25=X25Mg, Ca43=X43Ca, Mn55=X55Mn, Cu63=X63Cu, Zn68=X68Zn, Sr88=X88Sr, Ba138=X138Ba)%>%
+  gather(element, measurement, Li7:Ba138)
+
+data_select <- select(data_filter, Plate, Type, ID, Time,element,measurement)
+
+
+#average only the blanks and standards
+avg_data <- filter(data_select, Type!="Sample")%>%
+  group_by(Plate, element, Type, ID)%>%
+  summarise_all(mean)
+
+samples <- filter(data_select, Type=="Sample")%>%
+  full_join(avg_data)
+
+
+
+#order each plate x sample
+order_data <- group_by(samples, Plate, element)%>%
+  arrange(Time, .by_group=T)%>%
+  mutate(order= match(Time, unique(Time)))%>%
+  ungroup()
+
+
+#blank corrected
+#grab two surrounding blanks from sample/ standard and average them subtract that number from the sample/ standard
+
+# this is not working correctly right now- sometimes two samples with no blank inbetween- need to edit code like below to search for closest blank and use that value #
+
+plate <- sort(unique(order_data$Plate))
+blank_data <- NULL
+
+for (i in 1:length(plate)) {
+  each_plate <- filter(order_data, Plate == plate[i])
+    #each_sample <- dplyr::select(each_plate,Li7:Ba138)
+  
+    diff <- group_by(each_plate,element)%>%
+      mutate(blank= na_if(lag(measurement * (Type== "Blank")),0))%>%
+      fill(blank)%>%
+      mutate(diff=measurement-blank)
+    blank_data <- bind_rows(blank_data, diff)
+}
+#((lag(each_sample)+lead(each_sample))/2)
+
+## add the descriptive info back in
+# merge_info <- select(order_data, 1:4,13)%>%
+#   arrange(Plate)%>%
+#   bind_cols(blank_data)
+
+#only want the blank corrected samples and standards
+# no longer need the blanks- also can take out preablation 
+blank_samples <- filter(blank_data, Type!="Blank")%>%
+           filter(Type !="Preablation")%>%
+            select(! c(measurement, blank))%>%
+          spread(element, diff)
+
+
+#calculate standard intensity and chem ratio
+ratio <- mutate(blank_samples,LiCa= Li7/Ca43,
+                MgCa = Mg25/Ca43,
+                CaCa = Ca43/Ca43,
+                MnCa = Mn55/Ca43,
+                CuCa = Cu63/Ca43,
+                ZnCa = Zn68/Ca43,
+                SrCa = Sr88/Ca43,
+                BaCa = Ba138/Ca43)%>%
+  select(!Ba138:Zn68)%>%
+  arrange(Plate, order)
+
+#finish standardization
+# multiply and chemical ratio times the closest standard intensity and the standard concentration (this is a standard value for each element)
+
+# right now it is just grabbing the closest standard not calculating the mean of the two sandwiched values- working on it #
+
+element <- c("LiCa", "MgCa", "CaCa", "MnCa", "CuCa", "ZnCa", "SrCa", "BaCa")
+conc <- c(0.953025585, 7.682610043, 1, 1.037460238, 0.200804264, 0.18053357, 8.20395653, 0.045453)
+concentration <- data.frame(element, conc)  
+
+results <- tidyr::gather(ratio,element, measurement, LiCa:BaCa)%>%
+            full_join(concentration)%>%
+            group_by(Plate, element)%>%
+            mutate(standard= na_if(lag(measurement * (Type== "Standard")),0))%>%
+  fill(standard)%>%
+  filter(Type=="Sample")%>%
+  mutate(results= standard*measurement*conc)%>%
+  ungroup()%>%
+  select(!order)
+
+
+#add desciptive info back in to samples
+info <- select(data_filter,Plate, Type, ID,Time,element, Age.of.Sample, Age, Year.Class, Region, Weight, Sex )%>%
+  filter(Type=="Sample")%>%
+  mutate(element= paste(removeNumbers(element), "Ca", sep=""))
+
+merge <- right_join(info,results)%>%
+  group_by(Plate, element)%>%
+  arrange(Time, .by_group=T)%>%
+  ungroup()
+
+#save data
+#write.csv(merge, file=here("Data/Clean/BET_standard_071922.csv"))
+```
+
+## Step 3: Anomaly detection
+
+```{r}
+# anomaly detection is not working yet (modified from Sarah Becker)#
+oto_samples <- otolith_select$ID2
+oto_elements<- otolith_select$element
+oto_anoms <- NULL
+
+for( i in 1:length(oto_samples)){
+  #   subset samples
+  sub_samples <- subset(otolith_select, ID2 == oto_samples[i] )
+  
+  for (j in 1:length(oto_elements)){
+    # subset elements
+    sub_elements <- subset(sub_samples, element == oto_elements[j] )
+    elements <- sub_elements$measurement
+    
+     trend = runmed(elements, 5)
+    detrend = elements - as.vector(trend)
+    
+    min = mean(detrend, na.rm = T) - 5*sd(detrend, na.rm = T)
+    max = mean(detrend, na.rm = T) + 5*sd(detrend, na.rm = T)
+    
+    #find anomaly
+    position = data.frame(id=seq(1, length(detrend)), value=detrend)
+    anomalyH = position[position$value > max, ]
+    anomalyH = anomalyH[!is.na(anomalyH$value), ]
+    anomalyL = position[position$value < min, ]
+    anomalyL = anomalyL[!is.na(anomalyL$value),]
+    anomaly = data.frame(id=c(anomalyH$id, anomalyL$id),
+                         value=c(anomalyH$value, anomalyL$value))
+    real = data.frame(id=seq(1, length(elements)), value=elements)
+    
+    #extract anomalies
+    realAnomaly = real[anomaly$id, ]
+    
+    #add indexing columns back in
+    if(nrow(realAnomaly) == 0)next
+    realAnomaly$ID2 <- sub_elements$ID2[j] %>% as.character()
+    realAnomaly$elements <- sub_elements$measurement[j] %>% as.character()
+    #bind to empty dataframe
+    oto_anoms <- rbind(oto_anoms, realAnomaly)
+  }
+}
+
+# merge mini_otoliths_long and oto_anoms
+# first need to go back and add an index value to mini_otoliths_ling 
+mini_commercial_long <- mini_commercial_long %>% group_by(sample_id, element_names) %>% 
+  dplyr::mutate(id = seq(1:n())) 
+
+mini_commercial_long_anoms <- left_join(mini_commercial_long, oto_anoms, 
+                                      by = c("sample_id", "element_names", "id")) 
+
+# once merge is done, do a test plot to see if anom values make sense, and if they match up with default plots
+mini_commercial_long_anoms %>% 
+  filter(element_names == "mg25_ca48" & sample_id == "010716_1") %>%
+  ggplot()+
+  geom_line(aes(x=id, y=element_ratios))+
+  geom_point(aes(x=id, y=value), color = "red")+
+  themeo #index values appear to line up which is great
+```
+
+## Step 4: Plot the results
+
+```{r}
+#plots beore anomaly detection- definitnely see some anomalies
+data <- read.csv(here("Data/Clean/BET_standard_071922.csv"))[-1]
+
+# make age break column for plots
+oto_samples <- unique(data$ID)
+transects_age_break <- NULL
+
+##### RUN LOOP (modified from Sarah Becker)
+for( i in 1:length(oto_samples)){
+  #   subset samples
+  sub_samples <- subset(data, ID == oto_samples[i] )%>%
+    mutate(id=seq(1:n()))
+
+  #ID where age breaks occur
+  age_break <-  as.data.frame(which(sub_samples$Age.of.Sample!= dplyr::lag(sub_samples$Age.of.Sample)))
+  #rename column to not be crazy
+  age_break<- age_break %>% dplyr::rename("id" = "which(sub_samples$Age.of.Sample != dplyr::lag(sub_samples$Age.of.Sample))") 
+  #need to merge by id, then have a separate column to store the values
+  age_break <- age_break %>%  mutate(age_diff = id)
+  #do the merge
+  sub_samples <- left_join(sub_samples, age_break, by = "id")
+  # create new column that shows where breaks are by dist_from_core
+  sub_samples$age_break_dist <- ifelse(!is.na(sub_samples$age_diff), sub_samples$Time, NA)
+  #bind to empty dataframe
+  transects_age_break <- rbind(transects_age_break, sub_samples)
+}
+
+#write.csv(transects_age_break, here("Data/Clean/BET_age_breaks_071922.csv"))
+```
+
+```{r}
+
+#data with age breaks
+data <- read.csv(here("Data/Clean/BET_age_breaks_071922.csv"))[-1]%>%
+  select(!c("age_diff", "id"))%>%
+  filter(element!="CaCa")
+
+#set up plotting theme
+themeo <-theme_classic()+
+  theme(strip.background = element_blank(),
+        panel.grid.major = element_line(colour = "transparent"), 
+        panel.grid.minor = element_line(colour = "transparent"),
+        axis.line = element_blank(),
+        axis.title = element_text(color = "black", size = 8),
+        axis.ticks.length=unit(-0.1, "cm"),
+        axis.ticks = element_line(color = "black", size = .25),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.y = element_line(color = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=.5),
+        panel.spacing = unit(.5, "lines") )
+
+SampleID <- unique(data$ID)
+
+for (i in SampleID) {
+  temp_data <- filter(data, ID==i)
+  
+  plot <- ggplot(data=temp_data, aes(x=Time, y=results))+
+    geom_line()+
+    geom_point(size=1)+
+    geom_vline(aes(xintercept=age_break_dist), linetype="dashed")+
+    geom_text(aes(x = age_break_dist, y = +Inf,  label = Age.of.Sample),vjust=1, hjust=1)+
+    facet_wrap(~element,ncol=1, scales = "free")+
+    ggtitle(i)+ 
+    labs(y="Element ratio", x="")+
+    themeo
+  plot
+  ggsave(plot, path=here("Results/Figures"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+}
+```
+
+## Step 5: Analyze
+
+-   Differences in chemistry by year class, area of capture/ year of capture (and interactions)- MANOVA
+
+-   nmds (look for some groupings)?
+
+-   shouldn't be any differences because they all spawn in the same area- Gulf of Guniea
+
+```{r}
+
+```
