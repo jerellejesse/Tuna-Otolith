@@ -14,12 +14,12 @@ Code for cleaning, standardizing, and visualizing big eye tuna otolith micro-che
 
 4.  Plot output
 
-### Contact:
-
-Jerelle Jesse ([jjesse\@gmri.org](mailto:jjesse@gmri.org))
-
 ## Working Directory
 
 -   Data- raw and clean subfolders
 
 -   Code
+
+## Contact:
+
+Jerelle Jesse ([jjesse\@gmri.org](mailto:jjesse@gmri.org))

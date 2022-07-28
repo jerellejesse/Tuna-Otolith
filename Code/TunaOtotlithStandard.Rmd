@@ -33,6 +33,20 @@ otolith <- read.csv(here("Data/ICPMS master_071922.csv"))
 head(otolith)
 str(otolith)
 
+#set up plotting theme
+themeo <-theme_classic()+
+  theme(strip.background = element_blank(),
+        panel.grid.major = element_line(colour = "transparent"), 
+        panel.grid.minor = element_line(colour = "transparent"),
+        axis.line = element_blank(),
+        axis.title = element_text(color = "black", size = 8),
+        axis.ticks.length=unit(-0.1, "cm"),
+        axis.ticks = element_line(color = "black", size = .25),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.y = element_line(color = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=.5),
+        panel.spacing = unit(.5, "lines") )
 ```
 
 ### Step 1: Filter out "bad" data
@@ -183,18 +197,20 @@ merge <- right_join(info,results)%>%
 
 ```{r}
 # anomaly detection is not working yet (modified from Sarah Becker)#
-oto_samples <- otolith_select$ID2
-oto_elements<- otolith_select$element
+data <- read.csv(here("Data/Clean/BET_standard_071922.csv"))
+oto_samples <- unique(data$ID)
+oto_elements<- unique(data$element)
 oto_anoms <- NULL
+
 
 for( i in 1:length(oto_samples)){
   #   subset samples
-  sub_samples <- subset(otolith_select, ID2 == oto_samples[i] )
+  sub_samples <- subset(data, ID == oto_samples[i] )
   
   for (j in 1:length(oto_elements)){
     # subset elements
     sub_elements <- subset(sub_samples, element == oto_elements[j] )
-    elements <- sub_elements$measurement
+    elements <- sub_elements$results
     
      trend = runmed(elements, 5)
     detrend = elements - as.vector(trend)
@@ -216,29 +232,60 @@ for( i in 1:length(oto_samples)){
     realAnomaly = real[anomaly$id, ]
     
     #add indexing columns back in
-    if(nrow(realAnomaly) == 0)next
-    realAnomaly$ID2 <- sub_elements$ID2[j] %>% as.character()
-    realAnomaly$elements <- sub_elements$measurement[j] %>% as.character()
+        if(nrow(realAnomaly) == 0)next
+    realAnomaly$ID <- sub_elements$ID[i] %>% as.character()
+    realAnomaly$element <- sub_elements$element[j] %>% as.character()
+    
     #bind to empty dataframe
     oto_anoms <- rbind(oto_anoms, realAnomaly)
   }
 }
 
-# merge mini_otoliths_long and oto_anoms
-# first need to go back and add an index value to mini_otoliths_ling 
-mini_commercial_long <- mini_commercial_long %>% group_by(sample_id, element_names) %>% 
+# merge 
+# first need to go back and add an index value  
+data_id <- group_by(data,ID, element) %>% 
   dplyr::mutate(id = seq(1:n())) 
 
-mini_commercial_long_anoms <- left_join(mini_commercial_long, oto_anoms, 
-                                      by = c("sample_id", "element_names", "id")) 
+data_anom <- left_join(data_id, oto_anoms, by = c("ID", "element", "id")) 
 
-# once merge is done, do a test plot to see if anom values make sense, and if they match up with default plots
-mini_commercial_long_anoms %>% 
-  filter(element_names == "mg25_ca48" & sample_id == "010716_1") %>%
-  ggplot()+
-  geom_line(aes(x=id, y=element_ratios))+
-  geom_point(aes(x=id, y=value), color = "red")+
-  themeo #index values appear to line up which is great
+#save data
+#write.csv(data_anom, here("Data/Clean/BET_anom_071922.csv"))
+
+
+```
+
+Plot the anomalies
+
+```{r}
+data_anom <- read.csv(here("Data/Clean/BET_anom_071922.csv"))[-1]%>%
+  filter(element !="CaCa")
+
+uniq_samples <- unique(data_anom$ID)
+#### RUN LOOP
+for (i in uniq_samples) {
+  
+  plot <- ggplot(data= filter(data_anom, ID == i)) + 
+    geom_line(aes(x=Time, y=results))+
+    geom_point(aes(x=Time, y=value), color = "red")+
+    facet_wrap(~ element,ncol=1, scales = "free_y")+
+    ggtitle(i)+
+    themeo
+  
+    ggsave(plot, path=here("Results/Figures/Anomalies"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+}
+
+```
+
+remove anomalies
+
+```{r}
+#remove anomalies and save
+
+data_anom_removal <- filter(data_anom, is.na(value))%>%
+  select(!c("id", "value"))
+
+#write.csv(data_anom_removal, here("Data/Clean/BET_anom_removal_071922.csv"))
+
 ```
 
 ## Step 4: Plot the results
@@ -281,20 +328,64 @@ data <- read.csv(here("Data/Clean/BET_age_breaks_071922.csv"))[-1]%>%
   select(!c("age_diff", "id"))%>%
   filter(element!="CaCa")
 
-#set up plotting theme
-themeo <-theme_classic()+
-  theme(strip.background = element_blank(),
-        panel.grid.major = element_line(colour = "transparent"), 
-        panel.grid.minor = element_line(colour = "transparent"),
-        axis.line = element_blank(),
-        axis.title = element_text(color = "black", size = 8),
-        axis.ticks.length=unit(-0.1, "cm"),
-        axis.ticks = element_line(color = "black", size = .25),
-        axis.ticks.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.y = element_line(color = "black"),
-        panel.border = element_rect(colour = "black", fill=NA, size=.5),
-        panel.spacing = unit(.5, "lines") )
+SampleID <- unique(data$ID)
+
+for (i in SampleID) {
+  temp_data <- filter(data, ID==i)
+  
+  plot <- ggplot(data=temp_data, aes(x=Time, y=results))+
+    geom_line()+
+    geom_point(size=1)+
+    geom_vline(aes(xintercept=age_break_dist), linetype="dashed")+
+    geom_text(aes(x = age_break_dist, y = +Inf,  label = Age.of.Sample),vjust=1, hjust=1)+
+    facet_wrap(~element,ncol=1, scales = "free")+
+    ggtitle(i)+ 
+    labs(y="Element ratio", x="")+
+    themeo
+  plot
+  ggsave(plot, path=here("Results/Figures/transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+}
+```
+
+After anomaly detection
+
+```{r}
+# age breaks
+data <- read.csv(here("Data/Clean/BET_anom_removal_071922.csv"))[-1]
+
+# make age break column for plots
+oto_samples <- unique(data$ID)
+transects_age_break <- NULL
+
+##### RUN LOOP (modified from Sarah Becker)
+for( i in 1:length(oto_samples)){
+  #   subset samples
+  sub_samples <- subset(data, ID == oto_samples[i] )%>%
+    mutate(id=seq(1:n()))
+
+  #ID where age breaks occur
+  age_break <-  as.data.frame(which(sub_samples$Age.of.Sample!= dplyr::lag(sub_samples$Age.of.Sample)))
+  #rename column to not be crazy
+  age_break<- age_break %>% dplyr::rename("id" = "which(sub_samples$Age.of.Sample != dplyr::lag(sub_samples$Age.of.Sample))") 
+  #need to merge by id, then have a separate column to store the values
+  age_break <- age_break %>%  mutate(age_diff = id)
+  #do the merge
+  sub_samples <- left_join(sub_samples, age_break, by = "id")
+  # create new column that shows where breaks are by dist_from_core
+  sub_samples$age_break_dist <- ifelse(!is.na(sub_samples$age_diff), sub_samples$Time, NA)
+  #bind to empty dataframe
+  transects_age_break <- rbind(transects_age_break, sub_samples)
+}
+
+#write.csv(transects_age_break, here("Data/Clean/BET_age_breaks_anom_071922.csv"))
+```
+
+```{r}
+#plot
+#data with age breaks
+data <- read.csv(here("Data/Clean/BET_age_breaks_anom_071922.csv"))[-1]%>%
+  select(!c("age_diff", "id"))%>%
+  filter(element!="CaCa")
 
 SampleID <- unique(data$ID)
 
@@ -311,7 +402,8 @@ for (i in SampleID) {
     labs(y="Element ratio", x="")+
     themeo
   plot
-  ggsave(plot, path=here("Results/Figures"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+  
+  ggsave(plot, path=here("Results/Figures/Anom removed transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
 }
 ```
 
