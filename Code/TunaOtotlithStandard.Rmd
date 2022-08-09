@@ -97,12 +97,12 @@ data_filter <- filter(data, Cut.Out ==0)%>%
 data_select <- select(data_filter, Plate, Type, ID, Time,element,measurement)
 
 
-#average only the blanks and standards
-avg_data <- filter(data_select, Type!="Sample")%>%
+#average only the blanks
+avg_data <- filter(data_select, Type=="Blank")%>%
   group_by(Plate, element, Type, ID)%>%
   summarise_all(mean)
 
-samples <- filter(data_select, Type=="Sample")%>%
+samples <- filter(data_select, Type!="Blank")%>%
   full_join(avg_data)
 
 
@@ -143,46 +143,60 @@ for (i in 1:length(plate)) {
 # no longer need the blanks- also can take out preablation 
 blank_samples <- filter(blank_data, Type!="Blank")%>%
            filter(Type !="Preablation")%>%
-            select(! c(measurement, blank))%>%
+            select(! c(measurement, blank))#%>%
           spread(element, diff)
 
 
-#calculate standard intensity and chem ratio
-ratio <- mutate(blank_samples,LiCa= Li7/Ca43,
-                MgCa = Mg25/Ca43,
-                CaCa = Ca43/Ca43,
-                MnCa = Mn55/Ca43,
-                CuCa = Cu63/Ca43,
-                ZnCa = Zn68/Ca43,
-                SrCa = Sr88/Ca43,
-                BaCa = Ba138/Ca43)%>%
+#calculate standard intensity (avg Ca/ avg element)
+std_int <- filter(blank_samples, Type=="Standard")%>%
+  group_by(Plate, element)%>%
+  summarise(avg_std= mean(diff, na.rm=T))%>%
+          spread(element, avg_std)
+
+std_ratio <- mutate(std_int,Li= Ca43/Li7,
+                Mg = Ca43/Mg25,
+                Ca = Ca43/Ca43,
+                Mn = Ca43/Mn55,
+                Cu = Ca43/Cu63,
+                Zn = Ca43/Zn68,
+                Sr = Ca43/Sr88,
+                Ba = Ca43/Ba138)%>%
+         select(!Ba138:Zn68)%>%
+  gather(element, std, -Plate)
+
+element <- c("Li", "Mg", "Ca", "Mn", "Cu", "Zn", "Sr", "Ba")
+conc <- c(0.953025585, 7.682610043, 1, 1.037460238, 0.200804264, 0.18053357, 8.20395653, 0.045453)
+concentration <- data.frame(element, conc)
+
+std_conc <- full_join(std_ratio, concentration)
+
+#calculate chem ratio
+ratio <- spread(blank_samples, element, diff)%>%
+          filter(Type=="Sample")%>%
+         mutate(Li= Li7/Ca43,
+                Mg = Mg25/Ca43,
+                Ca = Ca43/Ca43,
+                Mn = Mn55/Ca43,
+                Cu = Cu63/Ca43,
+                Zn = Zn68/Ca43,
+                Sr = Sr88/Ca43,
+                Ba = Ba138/Ca43)%>%
   select(!Ba138:Zn68)%>%
-  arrange(Plate, order)
+  arrange(Plate, order)%>%
+  gather(element, measurement, -c(1:5))
 
 #finish standardization
-# multiply and chemical ratio times the closest standard intensity and the standard concentration (this is a standard value for each element)
+# multiply and chemical ratio times the standard intensity and the standard concentration (this is a standard value for each element)
 
-# right now it is just grabbing the closest standard not calculating the mean of the two sandwiched values- working on it #
-
-element <- c("LiCa", "MgCa", "CaCa", "MnCa", "CuCa", "ZnCa", "SrCa", "BaCa")
-conc <- c(0.953025585, 7.682610043, 1, 1.037460238, 0.200804264, 0.18053357, 8.20395653, 0.045453)
-concentration <- data.frame(element, conc)  
-
-results <- tidyr::gather(ratio,element, measurement, LiCa:BaCa)%>%
-            full_join(concentration)%>%
-            group_by(Plate, element)%>%
-            mutate(standard= na_if(lag(measurement * (Type== "Standard")),0))%>%
-  fill(standard)%>%
-  filter(Type=="Sample")%>%
-  mutate(results= standard*measurement*conc)%>%
-  ungroup()%>%
+results <-  full_join(ratio, std_conc)%>%
+  mutate(results= measurement*std*conc)%>%
   select(!order)
 
 
 #add desciptive info back in to samples
 info <- select(data_filter,Plate, Type, ID,Time,element, Age.of.Sample, Age, Year.Class, Region, Weight, Sex )%>%
   filter(Type=="Sample")%>%
-  mutate(element= paste(removeNumbers(element), "Ca", sep=""))
+  mutate(element= removeNumbers(element))
 
 merge <- right_join(info,results)%>%
   group_by(Plate, element)%>%
@@ -326,7 +340,7 @@ for( i in 1:length(oto_samples)){
 #data with age breaks
 data <- read.csv(here("Data/Clean/BET_age_breaks_071922.csv"))[-1]%>%
   select(!c("age_diff", "id"))%>%
-  filter(element!="CaCa")
+  filter(element!="Ca")
 
 SampleID <- unique(data$ID)
 
@@ -385,7 +399,7 @@ for( i in 1:length(oto_samples)){
 #data with age breaks
 data <- read.csv(here("Data/Clean/BET_age_breaks_anom_071922.csv"))[-1]%>%
   select(!c("age_diff", "id"))%>%
-  filter(element!="CaCa")
+  filter(element!="Ca")
 
 SampleID <- unique(data$ID)
 
