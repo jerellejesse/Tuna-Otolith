@@ -421,14 +421,54 @@ for (i in SampleID) {
 }
 ```
 
-## Step 5: Analyze
-
--   Differences in chemistry by year class, area of capture/ year of capture (and interactions)- MANOVA
-
--   nmds (look for some groupings)?
-
--   shouldn't be any differences because they all spawn in the same area- Gulf of Guniea
-
 ```{r}
+#try removing outliers and replotting
+data <- read.csv(here("Data/Clean/BET_age_breaks_anom_071922.csv"))[-1]%>%
+  select(!c("age_diff", "id"))%>%
+  filter(element!="Ca")
 
+ #lots of outliers so remove by group
+ remove_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs = c(.25, .75), na.rm = na.rm, ...)
+  val <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- x
+  y[x < (qnt[1] - val)] <- NA
+  y[x > (qnt[2] + val)] <- NA
+  y
+ }
+ 
+ data2 <- data %>% 
+  group_by(ID, element) %>% 
+  mutate(results = remove_outliers(results)) %>% 
+  ungroup() %>% 
+  filter(!is.na(results)) 
+ 
+  #how many are we removing?
+  outliers <- data %>% 
+  group_by(ID, element) %>% 
+  mutate(results = remove_outliers(results)) %>% 
+  ungroup() %>% 
+  filter(is.na(results))
+  percent <- (8153/405433)*100 # ~2%
+  
+  
+SampleID <- unique(data2$ID)
+
+for (i in SampleID) {
+  temp_data <- filter(data2, ID==i)
+  
+  plot <- ggplot(data=temp_data, aes(x=Time, y=results))+
+    geom_line()+
+    geom_point(size=1)+
+    geom_vline(aes(xintercept=age_break_dist), linetype="dashed")+
+    geom_text(aes(x = age_break_dist, y = +Inf,  label = Age.of.Sample),vjust=1, hjust=1)+
+    facet_wrap(~element,ncol=1, scales = "free")+
+    ggtitle(i)+ 
+    labs(y="Element ratio", x="")+
+    themeo
+  plot
+  
+  ggsave(plot, path=here("Results/Figures/Outlier removed transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+}
+  
 ```
