@@ -33,6 +33,10 @@ library(mvnormtest)
 library(mvoutlier)
 library(nlme)
 library(klaR)
+library(rstatix)
+library(mvnormalTest)
+library(heplots)
+library(RVAideMemoire)
 
 ```
 
@@ -59,7 +63,11 @@ themeo <-theme_classic()+
         legend.position = c(0.88,0.8),
         legend.title = element_text(colour = "black", size = 10, face = "bold"),
         legend.text = element_text(color = "black", size =8))
+
+
+
 ```
+
 
 ## Step 1: Summary Plots
 
@@ -90,19 +98,22 @@ box_plot
  }
  
  data2 <- data %>% 
-  group_by(ID, element) %>% 
+  group_by(element) %>% 
   mutate(results = remove_outliers(results)) %>% 
   ungroup() %>% 
   filter(!is.na(results)) 
  
+ summary(data2)
+ 
  #how many are we removing?
   outliers <- data %>% 
-  group_by(ID, element) %>% 
+  group_by(element) %>% 
   mutate(results = remove_outliers(results)) %>% 
   ungroup() %>% 
   filter(is.na(results))
-  percent <- (8153/405433)*100 # ~ 2%
+  percent <- (17938/405433)*100 # ~ 4.4%
   
+
  #try again
  box_plot <- ggplot(data2)+ 
   geom_boxplot(aes(x=Age.of.Sample, y=results, group=Age.of.Sample))+
@@ -120,6 +131,8 @@ Region
 ```{r}
 # grouped boxplots
 #by region
+table(data2$Region)
+
 region <- unique(data2$Region)
 
 for (i in region) {
@@ -166,6 +179,7 @@ Sex
 
 ```{r}
 #by sex
+table(data2$Sex)
 sex <- c("F", "M")
 
 for (i in sex) {
@@ -211,6 +225,9 @@ box_plot <- ggplot(temp_data)+
 Year Class
 
 ```{r}
+
+#sample size for year class
+table(data2$Year.Class)
 
 #by year class
 age <- unique(data2$Year.Class)
@@ -263,6 +280,8 @@ Year of Capture
 
 #year of capture
 data_split <- separate(data2,ID, c("ID", "Year.Capture"), sep="-")
+table(data_split$Year.Capture)
+summary(data_split)
 
 year <- unique(data_split$Year.Capture)
 
@@ -337,72 +356,21 @@ box_plot
 
 ```{r}
 #Prep data
-data3 <- dplyr::select(data_split, !c("measurement", "std", "conc", "X"))%>%
+data3 <- dplyr::select(data_split, !c("measurement","std","conc", "X"))%>%
   filter(Age.of.Sample==1)%>%
   spread(key=element, value=results)%>%
   group_by(ID, Year.Capture, Year.Class, Age, Region, Weight, Sex)%>%
-  summarise(medianBa= median(Ba, na.rm=T),
-            medianCu=median(Cu, na.rm=T),
-            medianLi=median(Li, na.rm=T),
-            medianMg=median(Mg, na.rm=T),
-            medianMn=median(Mn, na.rm=T),
-            medianSr=median(Sr, na.rm=T),
-            medianZn=median(Zn, na.rm=T))
+  summarise(medianBa= median(Ba, na.rm=TRUE),
+            medianCu=median(Cu, na.rm=TRUE),
+            medianLi=median(Li, na.rm=TRUE),
+            medianMg=median(Mg, na.rm=TRUE),
+            medianMn=median(Mn, na.rm=TRUE),
+            medianSr=median(Sr, na.rm=TRUE),
+            medianZn=median(Zn, na.rm=TRUE))%>%
+  filter(!is.na(medianCu))%>%
+  filter(!is.na(medianMg))
 
-## Plots
-#histograms
-hist_ba <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianBa)),aes(medianBa, fill=Region), alpha=0.5)
-
-hist_cu <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianCu)),aes(medianCu, fill=Region), alpha=0.5)
-
-hist_li <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianLi)),aes(medianLi, fill=Region), alpha=0.5)
-
-hist_mg <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianMg)),aes(medianMg, fill=Region), alpha=0.5)
-
-hist_mn <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianMn)),aes(medianMn, fill=Region), alpha=0.5)
-
-hist_sr <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianSr)),aes(medianSr, fill=Region), alpha=0.5)
-
-hist_zn <- ggplot()+geom_histogram(data=subset(data3, !is.na(medianZn)),aes(medianZn, fill=Region), alpha=0.5)
-
-grid.arrange(hist_ba, hist_cu, hist_li, hist_mg, hist_mn, hist_sr, ncol=2)
-
-#boxplots
-box_ba <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianBa)),aes(medianBa, fill=Region))
-
-box_cu <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianCu)),aes(medianCu, fill=Region))
-
-box_li <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianLi)),aes(medianLi, fill=Region))
-
-box_mg <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianMg)),aes(medianMg, fill=Region))
-
-box_mn <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianMn)),aes(medianMn, fill=Region))
-
-box_sr <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianSr)),aes(medianSr, fill=Region))
-
-box_zn <- ggplot()+geom_boxplot(data=subset(data3, !is.na(medianZn)),aes(medianZn, fill=Region))
-
-grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
-
-data3$Year.Capture <- as.numeric(data3$Year.Capture)
-
-#smooths
-smooth_ba <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianBa)),aes(Year.Capture, medianBa))
-
-smooth_cu <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianCu)),aes(Year.Capture,medianCu))
-
-smooth_li <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianLi)),aes(Year.Capture, medianLi))
-
-smooth_mg <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianMg)),aes(Year.Capture, medianMg))
-
-smooth_mn <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianMn)),aes(Year.Capture, medianMn))
-
-smooth_sr <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianSr)),aes(Year.Capture, medianSr))
-
-smooth_zn <- ggplot()+geom_smooth(data=subset(data3, !is.na(medianZn)),aes(Year.Capture, medianZn))
-
-grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, ncol=2)
-
+summary(data3)
 
 ```
 
@@ -416,37 +384,156 @@ grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, n
 
     -   repeated measures? (capture year)
 
-```{r}
-#multivariate
-elements <- cbind(log(data3$medianMg),log(data3$medianMn),log(data3$medianCu),log(data3$medianSr),log(data3$medianBa), log(data3$medianLi))
+Test Assumptions
 
-MV <- manova(elements~Region+ Year.Class+ Year.Capture, data=data3)
+```{r}
+#sample sizes
+table(data3$Region)
+table(data3$Year.Capture)
+table(data3$Year.Class)
+
+# combine NHAT and HAT
+data3$Region[data3$Region=="NHAT"]<- "HAT"
+
+#remove at least the 2011
+data3 <- filter(data3, Year.Class!=2011)
+#end up with 143 samples, but could remove 2013 and 2019 later - ask Lisa
+
+
+#rescale and merge info back in
+datascale <- scale(data3[,c(8:14)])%>% as.data.frame()
+info <-select(data3, 1:7)
+data4 <-bind_cols(info, datascale)
+summary(data4)
+
+
+#multivariate outliers for rescaled data and not rescaled
+mahalanobis_distance(data4[,c(8:14)])$is.outlier #there are a few outliers still
+
+mahalanobis_distance(data3[,c(8:14)])$is.outlier #there are a few outliers still (3)
+
+# try removing the rest of the outliers
+datanoout <- data3[,c(8:14)] %>% 
+doo(~mahalanobis_distance(.))%>%
+   bind_cols(info)%>%
+   filter(is.outlier == FALSE)
+  
+summary(datanoout)
+  
+#check again because still not passing multivariate normality
+mahalanobis_distance(datanoout[,c(1:7)])$is.outlier #3 more removed
+
+info2 <-select(datanoout, c(10:16))
+
+datanoout2 <- datanoout[,c(1:7)] %>% 
+doo(~mahalanobis_distance(.))%>%
+   bind_cols(info2)%>%
+   filter(is.outlier == FALSE)
+
+
+datanoout_log <- datanoout2 %>% 
+  mutate(logBa=log(medianBa),
+          logCu= log(medianCu),
+         logLi=log(medianLi),
+         logMg=log(medianMg),
+         logMn=log(medianMn),
+         logSr=log(medianSr),
+         logZn=log(medianZn))
+summary(datanoout_log)
+
+
+ 
+#univariate normality
+norm <- as.data.frame(datanoout %>% group_by(Region) %>% shapiro_test(medianBa, medianCu, medianLi, medianMg, medianMn, medianSr, medianZn))
+norm
+
+lognorm <- group_by(datanoout_log,Region)%>%
+  shapiro_test(logBa, logCu, logLi, logMg, logMn, logSr, logZn)%>%
+  as.data.frame() #p<0.05 means not normal- only SNE Sr and Ba violates assumption
+lognorm
+
+scalednorm <- as.data.frame(datanoout_scaled %>% group_by(Region) %>% shapiro_test(medianBa, medianCu, medianLi, medianMg, medianMn, medianSr, medianZn))
+scalednorm
+
+#multivariate normality
+mardia(datanoout[,c("medianBa", "medianCu", "medianLi", "medianMg", "medianMn", "medianSr", "medianZn")])$mv.test
+
+mardia(datanoout_log[,c("logBa", "logCu", "logLi", "logMg", "logMn", "logSr", "logZn")])$mv.test
+
+mardia(datanoout_scaled[,c("medianBa", "medianCu", "medianLi", "medianMg", "medianMn", "medianSr", "medianZn")])$mv.test
+
+mshapiro_test(datanoout[,c(8:14)])#p<0.05 means not normal- violates assumption
+
+mshapiro_test(datanoout_log[,c(1:7)]) #p<0.05
+
+mshapiro_test(datanoout_scaled[,c(8:14)])
+
+#homogeneity of covariances
+boxM(Y=datanoout[,c("medianBa", "medianCu", "medianLi", "medianMg", "medianMn", "medianSr", "medianZn")], group = datanoout$Region)
+
+boxM(Y=datanoout_log[,c("logBa", "logCu", "logLi", "logMg", "logMn", "logSr", "logZn")], group = datanoout_log$Region) #p>0.001 good
+
+
+#multicollinearity
+cor <- round(cor(datanoout[,c(8:14)]),2) #<0.90 is fine
+cor
+
+cor <- round(cor(datanoout_log[,c(1:7)]),2) #<0.90 is fine
+cor
+
+cor <- round(cor(datanoout_scaled[,c(8:14)]),2) #<0.90 is fine
+cor
+
+#linearity with pairs
+ggpairs(datanoout[,8:14]) #probably would look good if outliers were removed- now removed
+
+ggpairs(datanoout_log[,1:7])
+
+#homogeneity of variances
+homvar <- datanoout_log %>%
+  gather(key="Variable", value = "value", logBa, logCu, logLi, logMg, logMn, logSr, logZn)%>%
+  group_by(Variable)%>%
+  levene_test(value~Region)#a few p<0.05 for Cu and Sr so there is not homogeneity of variances for all
+homvar
+
+homvar <- datanoout%>%
+  gather(key="Variable", value = "value", medianBa, medianCu, medianLi, medianMg, medianMn, medianSr, medianZn)%>%
+  group_by(Variable)%>%
+  levene_test(value~Region)
+homvar
+
+#Q-Q plots
+mqqnorm(datanoout_log[,c(1:7)]) #identifying 2 outliers and pulling away from normal, but better than before
+
+#double check
+#sample sizes
+table(datanoout_log$Region)
+table(datanoout_log$Year.Capture)
+table(datanoout_log$Year.Class)
+
+```
+
+MANOVA
+```{r}
+#multivariate log data
+datanoout_log$Year.Capture <- as.factor(datanoout_log$Year.Capture)
+datanoout_log$Year.Class <- as.factor(datanoout_log$Year.Class)
+
+
+
+elements <- cbind(datanoout_log$logMg,datanoout_log$logMn,datanoout_log$logCu,datanoout_log$logSr,datanoout_log$logBa, datanoout_log$logLi)
+
+MV <- manova(elements~Region+ Year.Class+ Year.Capture, data=datanoout_log)
 
 summary(MV, test="Pillai")
-summary.aov(MV)
+summary.aov(MV) 
 
-#univariate for each element
-  
-AV_ba <- aov(log(medianBa)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_ba)
+#tukey tests for ANOVAs if we want to know which regions/ capture years have differences
+aov_ba <- aov(logBa ~ Region + Year.Capture + Year.Class, data=datanoout_log)
 
-AV_cu <- aov(log(medianCu)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_cu)
+summary(aov_ba)
+TukeyHSD(aov_ba)
 
-AV_li <- aov(log(medianLi)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_li)
-
-AV_mg <- aov(log(medianMg)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_mg)
-
-AV_mn <- aov(log(medianMn)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_mn)
-
-AV_sr <- aov(log(medianSr)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_sr)
-
-AV_zn <- aov(log(medianZn)~ Region+ Year.Class+ Year.Capture, data=data3)
-summary(AV_zn)
 ```
 
 Post hoc tests- LDA
@@ -458,104 +545,670 @@ Post hoc tests- LDA
 ```{r}
 
 #post hoc LDA for region
-post_hoc_region <- lda(data3$Region~ elements, CV=FALSE)
+post_hoc_region <- lda(datanoout_log$Region~ elements, CV=FALSE)
 post_hoc_region
 
-lda_region <- data.frame(data3[, "Region"], lda = predict(post_hoc)$x)
+lda_region <- data.frame(datanoout_log[, "Region"], lda = predict(post_hoc_region)$x)
 ggplot(lda_region) + geom_point(aes(x = lda.LD1, y = lda.LD2, colour = Region), size = 4)
 plot(post_hoc_region, dimen=1, type="both")
 
 round(post_hoc_region$scaling,2)
 
-jack_region <- lda(data3$Region~ elements, CV=TRUE)
-accJack <- table(data3$Region, jack_region$class)
-accJack
-sum(accJack[row(accJack) == col(accJack)]) / sum(accJack)
+prediction_region <- predict(post_hoc_region)
+prediction_region
+round(prediction_region$posterior, 2) #strength of classicfication
+round(apply(prediction_region$posterior, MARGIN=1, FUN=max),2)
+round(post_hoc_region$scaling, 2) #loadings indicate variables that contribute the most to that discriminant function
+acc <- table(datanoout_log$Region, prediction_region$class)
+acc #row= original data , column=predicted groups from LDA, can see where the LDA had problems classifying regions
+sum(acc[row(acc)==col(acc)])/sum(acc) # 57% accuracy assigning to correct regions
 
-#post hoc LDA for year class
-post_hoc_year <- lda(data3$Year.Class~ elements, CV=FALSE)
+jack_region <- lda(datanoout_log$Region~ elements, CV=TRUE)
+jack_region
+accJack <- table(datanoout_log$Region, jack_region$class)
+accJack
+sum(accJack[row(accJack) == col(accJack)]) / sum(accJack)#55% prediction accuracy with jacknife
+
+
+
+
+#post hoc LDA for year class (not significant in MANOVA)
+post_hoc_year <- lda(datanoout_log$Year.Class~ elements, CV=FALSE)
 post_hoc_year
 
-lda_year <- data.frame(data3[, "Year.Class"], lda = predict(post_hoc_year)$x)
+lda_year <- data.frame(datanoout_log[, "Year.Class"], lda = predict(post_hoc_year)$x)
 ggplot(lda_year) + geom_point(aes(x = lda.LD1, y = lda.LD2, colour = factor(Year.Class)), size = 4)
 
 
+
+
+
+
 #post hoc LDA for year capture
-post_hoc_capture <- lda(data3$Year.Capture~ elements, CV=FALSE)
+post_hoc_capture <- lda(datanoout_log$Year.Capture~ elements, CV=FALSE)
 post_hoc_capture
 
-lda_capture <- data.frame(data3[, "Year.Capture"], lda = predict(post_hoc_capture)$x)
+lda_capture <- data.frame(datanoout_log[, "Year.Capture"], lda = predict(post_hoc_capture)$x)
 ggplot(lda_capture) + geom_point(aes(x = lda.LD1, y = lda.LD2, colour = factor(Year.Capture)), size = 4)
 plot(post_hoc_capture, dimen=1, type="both")
 
 round(post_hoc_capture$scaling,2)
 
-jack_region <- lda(data3$Year.Capture~ elements, CV=TRUE)
-accJack <- table(data3$Year.Capture, jack_region$class)
+
+prediction_capture <- predict(post_hoc_capture)
+prediction_capture
+round(prediction_capture$posterior, 2) #strength of classicfication
+round(apply(prediction_capture$posterior, MARGIN=1, FUN=max),2)
+round(post_hoc_region$scaling, 2) #loadings indicate variables that contribute the most to that discriminant function
+acc <- table(datanoout_log$Year.Capture, prediction_capture$class)
+acc #row= original data , column=predicted groups from LDA, can see where the LDA had problems classifying regions
+sum(acc[row(acc)==col(acc)])/sum(acc) # 66% accuracy assigning to correct 
+
+jack_region <- lda(datanoout_log$Year.Capture~ elements, CV=TRUE)
+accJack <- table(datanoout_log$Year.Capture, jack_region$class)
 accJack
-sum(accJack[row(accJack) == col(accJack)]) / sum(accJack)
+sum(accJack[row(accJack) == col(accJack)]) / sum(accJack) #63% prediction accuracy wth jacknife
 ```
 
-Stepwise selection of elements
+#### Stepwise selection of elements
 
 ```{r}
 #region
-data_step <-as.data.frame(ungroup(data3[,c(5,8:14)]))%>%
+datanoout_log_step <- as.data.frame(ungroup(datanoout_log[,c(14,17:23)]))
+datanoout_log_step$Region <- as.factor(datanoout_log_step$Region)
+
+set.seed(321)
+lda_step <- stepclass(Region ~., data=datanoout_log_step, method="lda", improvement=0.001)
+lda_step
+
+#final model with report with jackknife or without?
+final <- lda(lda_step$formula, data=datanoout_log_step, CV=FALSE)
+final
+
+prediction <- predict(final)
+prediction
+acc <- table(datanoout_log_step$Region, prediction$class)
+acc #row= original data , column=predicted groups from LDA, can see where the LDA had problems classifying regions
+sum(acc[row(acc)==col(acc)])/sum(acc) #62% accuracy 
+     
+round(final$scaling, 2)       
+
+
+final <- lda(lda_step$formula, data=datanoout_log_step, CV=TRUE)
+final
+acc <- table(datanoout_log_step$Region, prediction$class)
+acc #row= original data , column=predicted groups from LDA, can see where the LDA had problems classifying regions
+sum(acc[row(acc)==col(acc)])/sum(acc) #jackknife still 62% ?
+
+```
+
+```{r}
+## Plots
+str(datanoout)
+
+#histograms
+hist_ba <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianBa)),aes(medianBa, fill=Region), alpha=0.5)
+
+hist_cu <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianCu)),aes(medianCu, fill=Region), alpha=0.5)
+
+hist_li <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianLi)),aes(medianLi, fill=Region), alpha=0.5)
+
+hist_mg <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianMg)),aes(medianMg, fill=Region), alpha=0.5)
+
+hist_mn <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianMn)),aes(medianMn, fill=Region), alpha=0.5)
+
+hist_sr <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianSr)),aes(medianSr, fill=Region), alpha=0.5)
+
+hist_zn <- ggplot()+geom_histogram(data=subset(datanoout_log, !is.na(medianZn)),aes(medianZn, fill=Region), alpha=0.5)
+
+grid.arrange(hist_ba, hist_cu, hist_li, hist_mg, hist_mn, hist_sr, ncol=2)
+
+#boxplots
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianBa)),aes(y=medianBa, fill=Region))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianCu)),aes(y=medianCu, fill=Region))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianLi)),aes(y=medianLi, fill=Region))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianMg)),aes(y=medianMg, fill=Region))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianMn)),aes(y=medianMn, fill=Region))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianSr)),aes(y=medianSr, fill=Region))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianZn)),aes(y=medianZn, fill=Region))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+
+#boxplots
+datanoout$Year.Capture <- as.factor(datanoout$Year.Capture)
+
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianBa)),aes(y=medianBa, fill=Year.Capture))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianCu)),aes(y=medianCu, fill=Year.Capture))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianLi)),aes(y=medianLi, fill=Year.Capture))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianMg)),aes(y=medianMg, fill=Year.Capture))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianMn)),aes(y=medianMn, fill=Year.Capture))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianSr)),aes(y=medianSr, fill=Year.Capture))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianZn)),aes(y=medianZn, fill=Year.Capture))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+#boxplots
+datanoout$Year.Class <- as.factor(datanoout$Year.Class)
+
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianBa)),aes(y=medianBa, fill=Year.Class))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianCu)),aes(y=medianCu, fill=Year.Class))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianLi)),aes(y=medianLi, fill=Year.Class))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianMg)),aes(y=medianMg, fill=Year.Class))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianMn)),aes(y=medianMn, fill=Year.Class))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianSr)),aes(y=medianSr, fill=Year.Class))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout, !is.na(medianZn)),aes(y=medianZn, fill=Year.Class))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+
+datanoout$Year.Capture <- as.numeric(as.character(datanoout$Year.Capture))
+
+#smooths
+smooth_ba <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianBa)),aes(Year.Capture, medianBa))
+
+smooth_cu <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianCu)),aes(Year.Capture,medianCu))
+
+smooth_li <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianLi)),aes(Year.Capture, medianLi))
+
+smooth_mg <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianMg)),aes(Year.Capture, medianMg))
+
+smooth_mn <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianMn)),aes(Year.Capture, medianMn))
+
+smooth_sr <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianSr)),aes(Year.Capture, medianSr))
+
+smooth_zn <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianZn)),aes(Year.Capture, medianZn))
+
+grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, ncol=2)
+
+datanoout$Year.Class <- as.numeric(as.character(datanoout$Year.Class))
+#smooths
+smooth_ba <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianBa)),aes(Year.Class, medianBa))
+
+smooth_cu <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianCu)),aes(Year.Class,medianCu))
+
+smooth_li <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianLi)),aes(Year.Class, medianLi))
+
+smooth_mg <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianMg)),aes(Year.Class, medianMg))
+
+smooth_mn <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianMn)),aes(Year.Class, medianMn))
+
+smooth_sr <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianSr)),aes(Year.Class, medianSr))
+
+smooth_zn <- ggplot()+geom_smooth(data=subset(datanoout, !is.na(medianZn)),aes(Year.Class, medianZn))
+
+grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, ncol=2)
+
+```
+
+### All Sample Ages
+
+```{r}
+#Prep data
+data_all <- dplyr::select(data_split, !c("measurement", "std", "conc", "X"))%>%
+  spread(key=element, value=results)%>%
+  group_by(ID, Year.Capture, Year.Class, Age, Region, Weight, Sex,Age.of.Sample)%>%
+  summarise(medianBa= median(Ba, na.rm=T),
+            medianCu=median(Cu, na.rm=T),
+            medianLi=median(Li, na.rm=T),
+            medianMg=median(Mg, na.rm=T),
+            medianMn=median(Mn, na.rm=T),
+            medianSr=median(Sr, na.rm=T),
+            medianZn=median(Zn, na.rm=T), .groups = "keep")%>%
+  filter(!is.na(medianCu)& !is.na(medianZn)& !is.na(medianSr))
+
+summary(data_all)
+
+info_all <- select(data_all, c(1:8))
+
+# try removing the rest of the outliers
+datanoout_all <- data_all[,c(9:15)] %>% 
+doo(~mahalanobis_distance(.))%>%
+   bind_cols(info_all)%>%
+   filter(is.outlier == FALSE)
+summary(datanoout_all)
+  
+datanoout_all_log <- datanoout_all %>% 
   mutate(logBa=log(medianBa),
-         logCu=log(medianCu),
+          logCu= log(medianCu),
          logLi=log(medianLi),
          logMg=log(medianMg),
          logMn=log(medianMn),
          logSr=log(medianSr),
          logZn=log(medianZn))%>%
- dplyr::select(!c(2:8))
+  filter(!is.na(logZn))
+summary(datanoout_all_log)
+
+#combine NHAT and HAT
+datanoout_all_log$Region[datanoout_all_log$Region=="NHAT"]<-"HAT"
+
+```
+
+
+MANOVA and post hoc analysis for all sample ages
+
+```{r}
+#sample sizes
+table(datanoout_all_log$Region)
+table(datanoout_all_log$Year.Capture)
+table(datanoout_all_log$Year.Class)
+datanoout_all_log <- filter(datanoout_all_log, Year.Class!=2011 &Year.Class!= 2019)
+
+elements <- cbind(datanoout_all_log$logMg,datanoout_all_log$logMn,datanoout_all_log$logCu,datanoout_all_log$logSr,datanoout_all_log$logBa, datanoout_all_log$logLi)
+
+MV <- manova(elements~Region+ Year.Class+ Year.Capture, data=datanoout_all_log)
+
+summary(MV, test="Pillai")
+summary.aov(MV)
+
+
+#post hoc LDA for region
+post_hoc_region <- lda(datanoout_all_log$Region~ elements, CV=FALSE)
+post_hoc_region
+
+lda_region <- data.frame(datanoout_all_log[, "Region"], lda = predict(post_hoc_region)$x)
+ggplot(lda_region) + geom_point(aes(x = lda.LD1, y = lda.LD2, colour = Region), size = 4)
+plot(post_hoc_region, dimen=1, type="both")
+
+round(post_hoc_region$scaling,2)
+
+prediction_region <- predict(post_hoc_region)
+prediction_region
+round(prediction_region$posterior, 2) #strength of classicfication
+round(apply(prediction_region$posterior, MARGIN=1, FUN=max),2)
+round(post_hoc_region$scaling, 2) #loadings indicate variables that contribute the most to that discriminant function
+acc <- table(datanoout_all_log$Region, prediction_region$class)
+acc #row= original data , column=predicted groups from LDA, can see where the LDA had problems classifying regions
+sum(acc[row(acc)==col(acc)])/sum(acc) # 58% accuracy assigning to correct regions
+
+jack_region <- lda(datanoout_all_log$Region~ elements, CV=TRUE)
+jack_region
+accJack <- table(datanoout_all_log$Region, jack_region$class)
+accJack
+sum(accJack[row(accJack) == col(accJack)]) / sum(accJack)#59% prediction accuracy with jacknife
+
+#stepwise selection
+data_step <-as.data.frame(ungroup(datanoout_all_log[,c(14,18:24)]))
 
 data_step$Region <-as.factor(data_step$Region)
 str(data_step)
 
-lda_step <- stepclass(Region ~., data=data_step, method="lda")
+set.seed(123)
+lda_step <- stepclass(Region ~., data=data_step, method="lda", improvement=0.001)
 lda_step
 
-# year class
-data_step <-as.data.frame(ungroup(data3[,c(3,8:14)]))%>%
-  mutate(logBa=log(medianBa),
-         logCu=log(medianCu),
-         logLi=log(medianLi),
-         logMg=log(medianMg),
-         logMn=log(medianMn),
-         logSr=log(medianSr),
-         logZn=log(medianZn))%>%
- dplyr::select(!c(2:8))
+#final model with report with jackknife or without?
+final <- lda(lda_step$formula, data=data_step, CV=FALSE)
+final
 
-data_step$Year.Class <-as.factor(data_step$Year.Class)
-str(data_step)
-
-lda_step <- stepclass(Year.Class ~., data=data_step, method="lda")
-lda_step
-
-
-# year capture
-data_step <-as.data.frame(ungroup(data3[,c(2,8:14)]))%>%
-  mutate(logBa=log(medianBa),
-         logCu=log(medianCu),
-         logLi=log(medianLi),
-         logMg=log(medianMg),
-         logMn=log(medianMn),
-         logSr=log(medianSr),
-         logZn=log(medianZn))%>%
- dplyr::select(!c(2:8))
-
-data_step$Year.Capture <-as.factor(data_step$Year.Capture)
-str(data_step)
-
-lda_step <- stepclass(Year.Capture ~., data=data_step, method="lda")
-lda_step
-
+prediction <- predict(final)
+prediction
+acc <- table(data_step$Region, final$class)
+acc #row= original data , column=predicted groups from LDA, can see where the LDA had problems classifying regions
+sum(acc[row(acc)==col(acc)])/sum(acc) #59% accuracy with jackknife
+     
+round(final$scaling, 2) 
 ```
-
-Test Assumptions
 
 ```{r}
-#pairs
-ggpairs(data3[,8:14])
+
+## Plots
+#histograms
+hist_ba <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianBa)),aes(medianBa, fill=Region), alpha=0.5)
+
+hist_cu <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianCu)),aes(medianCu, fill=Region), alpha=0.5)
+
+hist_li <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianLi)),aes(medianLi, fill=Region), alpha=0.5)
+
+hist_mg <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianMg)),aes(medianMg, fill=Region), alpha=0.5)
+
+hist_mn <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianMn)),aes(medianMn, fill=Region), alpha=0.5)
+
+hist_sr <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianSr)),aes(medianSr, fill=Region), alpha=0.5)
+
+hist_zn <- ggplot()+geom_histogram(data=subset(datanoout_all, !is.na(medianZn)),aes(medianZn, fill=Region), alpha=0.5)
+
+grid.arrange(hist_ba, hist_cu, hist_li, hist_mg, hist_mn, hist_sr, ncol=2)
+
+#boxplots
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianBa)),aes(y=medianBa, fill=Region))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianCu)),aes(y=medianCu, fill=Region))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianLi)),aes(y=medianLi, fill=Region))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMg)),aes(y=medianMg, fill=Region))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMn)),aes(y=medianMn, fill=Region))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianSr)),aes(y=medianSr, fill=Region))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianZn)),aes(y=medianZn, fill=Region))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+#boxplots
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianBa)),aes(y=medianBa, fill=Year.Capture))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianCu)),aes(y=medianCu, fill=Year.Capture))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianLi)),aes(y=medianLi, fill=Year.Capture))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMg)),aes(y=medianMg, fill=Year.Capture))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMn)),aes(y=medianMn, fill=Year.Capture))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianSr)),aes(y=medianSr, fill=Year.Capture))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianZn)),aes(y=medianZn, fill=Year.Capture))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+#boxplots
+datanoout_all$Year.Class <-as.factor(datanoout_all$Year.Class)
+
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianBa)),aes(y=medianBa, fill=Year.Class))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianCu)),aes(y=medianCu, fill=Year.Class))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianLi)),aes(y=medianLi, fill=Year.Class))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMg)),aes(y=medianMg, fill=Year.Class))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMn)),aes(y=medianMn, fill=Year.Class))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianSr)),aes(y=medianSr, fill=Year.Class))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianZn)),aes(y=medianZn, fill=Year.Class))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+#boxplots
+datanoout_all$Age.of.Sample <-as.factor(datanoout_all$Age.of.Sample)
+
+box_ba <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianBa)),aes(y=medianBa, fill=Age.of.Sample))
+
+box_cu <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianCu)),aes(y=medianCu, fill=Age.of.Sample))
+
+box_li <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianLi)),aes(y=medianLi, fill=Age.of.Sample))
+
+box_mg <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMg)),aes(y=medianMg, fill=Age.of.Sample))
+
+box_mn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianMn)),aes(y=medianMn, fill=Age.of.Sample))
+
+box_sr <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianSr)),aes(y=medianSr, fill=Age.of.Sample))
+
+box_zn <- ggplot()+geom_boxplot(data=subset(datanoout_all, !is.na(medianZn)),aes(y=medianZn, fill=Age.of.Sample))
+
+grid.arrange(box_ba, box_cu, box_li, box_mg, box_mn, box_sr, ncol=2)
+
+datanoout_all$Year.Capture <- as.numeric(datanoout_all$Year.Capture)
+datanoout_all$Year.Class <- as.numeric(datanoout_all$Year.Class)
+datanoout_all$Age.of.Sample <- as.numeric(datanoout_all$Age.of.Sample)
+
+#smooths
+smooth_ba <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianBa)),aes(Year.Capture, medianBa))
+
+smooth_cu <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianCu)),aes(Year.Capture,medianCu))
+
+smooth_li <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianLi)),aes(Year.Capture, medianLi))
+
+smooth_mg <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianMg)),aes(Year.Capture, medianMg))
+
+smooth_mn <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianMn)),aes(Year.Capture, medianMn))
+
+smooth_sr <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianSr)),aes(Year.Capture, medianSr))
+
+smooth_zn <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianZn)),aes(Year.Capture, medianZn))
+
+grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, ncol=2)
+
+#smooths
+smooth_ba <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianBa)),aes(Year.Class, medianBa))
+
+smooth_cu <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianCu)),aes(Year.Class,medianCu))
+
+smooth_li <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianLi)),aes(Year.Class, medianLi))
+
+smooth_mg <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianMg)),aes(Year.Class, medianMg))
+
+smooth_mn <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianMn)),aes(Year.Class, medianMn))
+
+smooth_sr <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianSr)),aes(Year.Class, medianSr))
+
+smooth_zn <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianZn)),aes(Year.Class, medianZn))
+
+grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, ncol=2)
+
+#smooths
+smooth_ba <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianBa)),aes(Age.of.Sample, medianBa))
+
+smooth_cu <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianCu)),aes(Age.of.Sample,medianCu))
+
+smooth_li <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianLi)),aes(Age.of.Sample, medianLi))
+
+smooth_mg <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianMg)),aes(Age.of.Sample, medianMg))
+
+smooth_mn <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianMn)),aes(Age.of.Sample, medianMn))
+
+smooth_sr <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianSr)),aes(Age.of.Sample, medianSr))
+
+smooth_zn <- ggplot()+geom_smooth(data=subset(datanoout_all, !is.na(medianZn)),aes(Age.of.Sample, medianZn))
+
+grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, ncol=2)
+
 ```
+
+Region
+
+```{r}
+# grouped boxplots
+#by region
+data_all <- gather(datanoout_all, "element", "results",9:15)
+region <- unique(data_all$Region)
+
+for (i in region) {
+  temp_data <- dplyr::filter(data_all, Region==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=Age.of.Sample, y=results, group=Age.of.Sample))+
+  facet_wrap(~element, ncol = 1, scales = "free")+
+  ggtitle(i)
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Region"), file=paste0("boxplot_", i,".png"), width=10, height=25, units="cm")
+ 
+}
+
+#by element and region
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=Region, y=results, group=Region))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Region"), file=paste0("boxplot_region_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+
+#by element and region and age
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=factor(Age.of.Sample), y=results, fill=Region))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Region"), file=paste0("boxplot_region_age_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+```
+
+Sex
+
+```{r}
+#by sex
+sex <- c("F", "M")
+
+for (i in sex) {
+  temp_data <- dplyr::filter(data_all, Sex==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=Age.of.Sample, y=results, group=Age.of.Sample))+
+  facet_wrap(~element, ncol = 1, scales = "free")+
+  ggtitle(i)
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Sex"), file=paste0("boxplot_", i,".png"), width=10, height=25, units="cm")
+ 
+}
+
+#by element and sex
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=Sex, y=results, group=Sex))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Sex"), file=paste0("boxplot_sex_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+
+#by element and sex and age
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=factor(Age.of.Sample), y=results, fill=Sex))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Sex"), file=paste0("boxplot_sex_age_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+```
+
+Year Class
+
+```{r}
+
+#by year class
+age <- unique(data_all$Year.Class)
+
+for (i in age) {
+  temp_data <- dplyr::filter(data_all, Year.Class==i)
+  
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=factor(Age.of.Sample), y=results, group=factor(Age.of.Sample)))+
+  facet_wrap(~element, ncol = 1, scales = "free")+
+  ggtitle(paste0("Year Class: ",i))
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Year Class"), file=paste0("boxplot_class_", i,".png"), width=10, height=25, units="cm")
+ 
+}
+
+#by element and year class
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=factor(Year.Class), y=results, group=Year.Class))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Year Class"), file=paste0("boxplot_age_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+
+#by element and year class and age
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=factor(Age.of.Sample), y=results, fill=factor(Year.Class)))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Year Class"), file=paste0("boxplot_class_age_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+
+```
+
+Year of Capture
+
+```{r}
+
+#year of capture
+#data_split <- separate(data_all,ID, c("ID", "Year.Capture"), sep="-")
+
+year <- unique(data_all$Year.Capture)
+
+for (i in year) {
+  temp_data <- dplyr::filter(data_all, Year.Capture==i)
+  
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=Age.of.Sample, y=results, group=Age.of.Sample))+
+  facet_wrap(~element, ncol = 1, scales = "free")+
+  ggtitle(paste0("Year Capture: ",i))
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Capture Year"), file=paste0("boxplot_capture_", i,".png"), width=10, height=25, units="cm")
+ 
+}
+
+#by element and capture year
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=Year.Capture, y=results, group=Year.Capture))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Capture Year"), file=paste0("boxplot_capture_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+
+#by element and capture year and age
+element <- unique(data_all$element)
+
+for (i in element) {
+  temp_data <- dplyr::filter(data_all, element==i)
+box_plot <- ggplot(temp_data)+ 
+  geom_boxplot(aes(x=factor(Age.of.Sample), y=results, fill=Year.Capture))+
+  #facet_wrap(~, ncol = 1, scales = "free")+
+  ggtitle(i)+themeo
+
+ ggsave(box_plot, path=here("Results/Figures/Boxplots/Capture Year"), file=paste0("boxplot_capture_age_", i,".png"), width=10, height=10, units="cm")
+ 
+}
+```
+
+
+
