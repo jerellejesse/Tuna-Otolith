@@ -396,8 +396,8 @@ table(data3$Year.Class)
 data3$Region[data3$Region=="NHAT"]<- "HAT"
 
 #remove at least the 2011
-data3 <- filter(data3, Year.Class!=2011)
-#end up with 143 samples, but could remove 2013 and 2019 later - ask Lisa
+data3 <- filter(data3, Year.Class!=2011 & Year.Class!=2013 & Year.Class!=2018 & Year.Class!=2019)
+#end up with 130 samples
 
 
 #rescale and merge info back in
@@ -549,6 +549,7 @@ post_hoc_region <- lda(datanoout_log$Region~ elements, CV=FALSE)
 post_hoc_region
 
 lda_region <- data.frame(datanoout_log[, "Region"], lda = predict(post_hoc_region)$x)
+
 ggplot(lda_region) + geom_point(aes(x = lda.LD1, y = lda.LD2, colour = Region), size = 4)
 plot(post_hoc_region, dimen=1, type="both")
 
@@ -556,7 +557,7 @@ round(post_hoc_region$scaling,2)
 
 prediction_region <- predict(post_hoc_region)
 prediction_region
-round(prediction_region$posterior, 2) #strength of classicfication
+round(prediction_region$posterior, 2) #strength of classification
 round(apply(prediction_region$posterior, MARGIN=1, FUN=max),2)
 round(post_hoc_region$scaling, 2) #loadings indicate variables that contribute the most to that discriminant function
 acc <- table(datanoout_log$Region, prediction_region$class)
@@ -765,7 +766,7 @@ grid.arrange(smooth_ba, smooth_cu, smooth_li, smooth_mg, smooth_mn, smooth_sr, n
 #Prep data
 data_all <- dplyr::select(data_split, !c("measurement", "std", "conc", "X"))%>%
   spread(key=element, value=results)%>%
-  group_by(ID, Year.Capture, Year.Class, Age, Region, Weight, Sex,Age.of.Sample)%>%
+  group_by(ID, Year.Capture, Year.Class, Age, Region, Weight, Sex)%>%
   summarise(medianBa= median(Ba, na.rm=T),
             medianCu=median(Cu, na.rm=T),
             medianLi=median(Li, na.rm=T),
@@ -777,10 +778,10 @@ data_all <- dplyr::select(data_split, !c("measurement", "std", "conc", "X"))%>%
 
 summary(data_all)
 
-info_all <- select(data_all, c(1:8))
+info_all <- select(data_all, c(1:7))
 
 # try removing the rest of the outliers
-datanoout_all <- data_all[,c(9:15)] %>% 
+datanoout_all <- data_all[,c(8:14)] %>% 
 doo(~mahalanobis_distance(.))%>%
    bind_cols(info_all)%>%
    filter(is.outlier == FALSE)
@@ -810,7 +811,8 @@ MANOVA and post hoc analysis for all sample ages
 table(datanoout_all_log$Region)
 table(datanoout_all_log$Year.Capture)
 table(datanoout_all_log$Year.Class)
-datanoout_all_log <- filter(datanoout_all_log, Year.Class!=2011 &Year.Class!= 2019)
+table(datanoout_all_log$Age)
+datanoout_all_log <- filter(datanoout_all_log, Year.Class!=2011 & Year.Class!= 2013 & Year.Class!=2018 & Year.Class!= 2019)
 
 elements <- cbind(datanoout_all_log$logMg,datanoout_all_log$logMn,datanoout_all_log$logCu,datanoout_all_log$logSr,datanoout_all_log$logBa, datanoout_all_log$logLi)
 
@@ -846,7 +848,7 @@ accJack
 sum(accJack[row(accJack) == col(accJack)]) / sum(accJack)#59% prediction accuracy with jacknife
 
 #stepwise selection
-data_step <-as.data.frame(ungroup(datanoout_all_log[,c(14,18:24)]))
+data_step <-as.data.frame(ungroup(datanoout_all_log[,c(14,17:23)]))
 
 data_step$Region <-as.factor(data_step$Region)
 str(data_step)

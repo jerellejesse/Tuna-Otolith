@@ -3,15 +3,17 @@ title: "Big Eye Tuna Otolith Micro-Chemistry"
 author: "Jerelle Jesse"
 output:
     html_document: 
-    toc: true
-    toc_float: true
-    code_folding: hide
+      toc: true
+      toc_float: true
+      code_folding: hide
 editor_options: 
   chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo=TRUE)
+knitr::opts_chunk$set(fig.width=10, fig.height=25) 
+
 # Access GMRI CSS Style
 library(gmRi)
 gmRi::use_gmri_style_rmd(css_file = "gmri_rmarkdown.css")
@@ -25,13 +27,14 @@ library(purrr)
 library(tm)
 library(ggplot2)
 library(ggrepel)
+
 ```
 
 ```{r}
 # load in data
 otolith <- read.csv(here("Data/ICPMS master_071922.csv"))
-head(otolith)
-str(otolith)
+#head(otolith)
+#str(otolith)
 
 #set up plotting theme
 themeo <-theme_classic()+
@@ -49,7 +52,8 @@ themeo <-theme_classic()+
         panel.spacing = unit(.5, "lines") )
 ```
 
-### Step 1: Filter out "bad" data
+## Step 1: Filter out "bad" data
+- Zach identifies this
 
 ```{r}
 #remove flagged data
@@ -72,9 +76,9 @@ otolith_select <- dplyr::select(otolith_filter, Plate, ID, ID2,
 
 ## Step 2: Calculate Standardization
 
--   average for blanks and standards
-
--   each sample separate (laser hits)
+- blank correct standards and samples
+- calculate standard intensity and chemical ratio
+- multiply by standard concentration
 
 ```{r}
 #read in data with bad data filtered out
@@ -117,8 +121,6 @@ order_data <- group_by(samples, Plate, element)%>%
 #blank corrected
 #grab two surrounding blanks from sample/ standard and average them subtract that number from the sample/ standard
 
-# this is not working correctly right now- sometimes two samples with no blank inbetween- need to edit code like below to search for closest blank and use that value #
-
 plate <- sort(unique(order_data$Plate))
 blank_data <- NULL
 
@@ -132,19 +134,15 @@ for (i in 1:length(plate)) {
       mutate(diff=measurement-blank)
     blank_data <- bind_rows(blank_data, diff)
 }
-#((lag(each_sample)+lead(each_sample))/2)
 
-## add the descriptive info back in
-# merge_info <- select(order_data, 1:4,13)%>%
-#   arrange(Plate)%>%
-#   bind_cols(blank_data)
+
 
 #only want the blank corrected samples and standards
 # no longer need the blanks- also can take out preablation 
 blank_samples <- filter(blank_data, Type!="Blank")%>%
            filter(Type !="Preablation")%>%
             select(! c(measurement, blank))#%>%
-          spread(element, diff)
+          #spread(element, diff)
 
 
 #calculate standard intensity (avg Ca/ avg element)
@@ -193,7 +191,7 @@ results <-  full_join(ratio, std_conc)%>%
   select(!order)
 
 
-#add desciptive info back in to samples
+#add descriptive info back in to samples
 info <- select(data_filter,Plate, Type, ID,Time,element, Age.of.Sample, Age, Year.Class, Region, Weight, Sex )%>%
   filter(Type=="Sample")%>%
   mutate(element= removeNumbers(element))
@@ -210,7 +208,7 @@ merge <- right_join(info,results)%>%
 ## Step 3: Anomaly detection
 
 ```{r}
-# anomaly detection is not working yet (modified from Sarah Becker)#
+
 data <- read.csv(here("Data/Clean/BET_standard_071922.csv"))
 oto_samples <- unique(data$ID)
 oto_elements<- unique(data$element)
@@ -268,8 +266,8 @@ data_anom <- left_join(data_id, oto_anoms, by = c("ID", "element", "id"))
 
 ```
 
-Plot the anomalies
-
+### Plot the anomalies
+- quite a few anomalies
 ```{r}
 data_anom <- read.csv(here("Data/Clean/BET_anom_071922.csv"))[-1]%>%
   filter(element !="CaCa")
@@ -284,13 +282,14 @@ for (i in uniq_samples) {
     facet_wrap(~ element,ncol=1, scales = "free_y")+
     ggtitle(i)+
     themeo
-  
-    ggsave(plot, path=here("Results/Figures/Anomalies"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+  plot
+ #   ggsave(plot, path=here("Results/Figures/Anomalies"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
 }
 
+print(plot)
 ```
 
-remove anomalies
+### Remove anomalies
 
 ```{r}
 #remove anomalies and save
@@ -303,7 +302,6 @@ data_anom_removal <- filter(data_anom, is.na(value))%>%
 ```
 
 ## Step 4: Plot the results
-
 ```{r}
 #plots beore anomaly detection- definitnely see some anomalies
 data <- read.csv(here("Data/Clean/BET_standard_071922.csv"))[-1]
@@ -357,12 +355,13 @@ for (i in SampleID) {
     labs(y="Element ratio", x="")+
     themeo
   plot
-  ggsave(plot, path=here("Results/Figures/transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+ # ggsave(plot, path=here("Results/Figures/transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
 }
+
 ```
 
-After anomaly detection
-
+### After anomaly detection
+- still looks like there is machine error?
 ```{r}
 # age breaks
 data <- read.csv(here("Data/Clean/BET_anom_removal_071922.csv"))[-1]
@@ -371,7 +370,7 @@ data <- read.csv(here("Data/Clean/BET_anom_removal_071922.csv"))[-1]
 oto_samples <- unique(data$ID)
 transects_age_break <- NULL
 
-##### RUN LOOP (modified from Sarah Becker)
+##### RUN LOOP 
 for( i in 1:length(oto_samples)){
   #   subset samples
   sub_samples <- subset(data, ID == oto_samples[i] )%>%
@@ -417,10 +416,12 @@ for (i in SampleID) {
     themeo
   plot
   
-  ggsave(plot, path=here("Results/Figures/Anom removed transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+#  ggsave(plot, path=here("Results/Figures/Anom removed transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
 }
+print(plot)
 ```
 
+### Try removing outliers
 ```{r}
 #try removing outliers and replotting
 data <- read.csv(here("Data/Clean/BET_age_breaks_anom_071922.csv"))[-1]%>%
@@ -449,14 +450,20 @@ data <- read.csv(here("Data/Clean/BET_age_breaks_anom_071922.csv"))[-1]%>%
   mutate(results = remove_outliers(results)) %>% 
   ungroup() %>% 
   filter(is.na(results))
-  percent <- (8153/405433)*100 # ~2%
+  percent <- nrow(outliers)/nrow(data)*100
   
+
   
+```
+
+
+```{r}
+
 SampleID <- unique(data2$ID)
 
 for (i in SampleID) {
   temp_data <- filter(data2, ID==i)
-  
+ 
   plot <- ggplot(data=temp_data, aes(x=Time, y=results))+
     geom_line()+
     geom_point(size=1)+
@@ -466,9 +473,8 @@ for (i in SampleID) {
     ggtitle(i)+ 
     labs(y="Element ratio", x="")+
     themeo
-  plot
-  
-  ggsave(plot, path=here("Results/Figures/Outlier removed transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
+  #ggsave(plot, path=here("Results/Figures/Outlier removed transects"), file=paste0("plot_", i,".png"), width=10, height=25, units="cm")
 }
+print(plot)
   
 ```
